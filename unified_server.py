@@ -205,28 +205,6 @@ def generate_image():
             generation_kwargs["negative_prompt"] = negative_prompt
             generation_kwargs["generator"] = generator
         
-        # Process reference image if provided (SD3 only)
-        if reference_image_base64 and model_type == 'sd3' and image_encoder is not None:
-            try:
-                # Decode base64 image
-                img_data = base64.b64decode(reference_image_base64)
-                reference_image = Image.open(io.BytesIO(img_data)).convert("RGB")
-                
-                # Process image for CLIP
-                clip_image = image_processor(images=reference_image, return_tensors="pt").pixel_values
-                clip_image = clip_image.to(torch.float16).to(image_encoder.device)
-                
-                # Extract image features
-                clip_image_embeds = image_encoder(pixel_values=clip_image, output_hidden_states=True).hidden_states[-2]
-                
-                # Add IP-Adapter parameters
-                generation_kwargs["clip_image"] = clip_image_embeds
-                generation_kwargs["ipadapter_scale"] = ipadapter_scale
-                
-            except Exception as e:
-                print(f"Error processing reference image: {e}")
-                # Continue without reference image
-        
         # Generate image
         with torch.inference_mode():
             with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -261,10 +239,6 @@ def generate_image():
         
         if model_type == 'sd3' and negative_prompt:
             response_data["parameters"]["negative_prompt"] = negative_prompt
-        
-        if reference_image_base64 and model_type == 'sd3':
-            response_data["parameters"]["ipadapter_scale"] = ipadapter_scale
-            response_data["parameters"]["used_reference_image"] = True
         
         return jsonify(response_data)
         
@@ -301,10 +275,6 @@ def generate_image_file():
         
         seed = data.get('seed', None)
         
-        # IP-Adapter parameters (SD3 only)
-        reference_image_base64 = data.get('reference_image', None)
-        ipadapter_scale = data.get('ipadapter_scale', 0.8)
-        
         # Set seed
         generator = None
         if seed is not None:
@@ -328,23 +298,6 @@ def generate_image_file():
         else:
             generation_kwargs["negative_prompt"] = negative_prompt
             generation_kwargs["generator"] = generator
-        
-        # Process reference image if provided (SD3 only)
-        if reference_image_base64 and model_type == 'sd3' and image_encoder is not None:
-            try:
-                img_data = base64.b64decode(reference_image_base64)
-                reference_image = Image.open(io.BytesIO(img_data)).convert("RGB")
-                
-                clip_image = image_processor(images=reference_image, return_tensors="pt").pixel_values
-                clip_image = clip_image.to(torch.float16).to(image_encoder.device)
-                
-                clip_image_embeds = image_encoder(pixel_values=clip_image, output_hidden_states=True).hidden_states[-2]
-                
-                generation_kwargs["clip_image"] = clip_image_embeds
-                generation_kwargs["ipadapter_scale"] = ipadapter_scale
-                
-            except Exception as e:
-                print(f"Error processing reference image: {e}")
         
         # Generate image
         with torch.inference_mode():
