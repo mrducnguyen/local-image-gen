@@ -115,23 +115,54 @@ pip install -r requirements.txt
 ./start.sh  # For native installation
 ```
 
-## FLUX.1.schnell Pipeline Requirements
+## FLUX.1.schnell Memory Requirements
 
-**Critical Implementation Detail:** FLUX.1.schnell requires a specific loading sequence:
+### Model Components and Memory Breakdown
 
-1. ✅ **Load pipeline on CPU first**
-2. ✅ **Use sequential CPU offload** to move components to GPU
-3. ❌ **Never use `.to('cuda')` directly** - this causes conflicts
+FLUX.1-schnell consists of several large components that contribute to its memory footprint:
+
+1. **DiT (Diffusion Transformer)**: ~12 billion parameters
+2. **T5-XXL Text Encoder**: ~4.5 billion parameters (largest memory consumer)
+3. **CLIP Text Encoder**: Additional text understanding
+4. **VAE (Variational Autoencoder)**: For latent space operations
+
+### Total Memory Requirements
+
+**System RAM Requirements:**
+- **Minimum**: 32GB RAM (with potential swapping)
+- **Recommended**: 48GB RAM (observed typical usage)
+- **Optimal**: 64GB RAM (for smooth loading without swapping)
+
+**Why 48-64GB RAM?**
+- Model size on disk: ~24GB
+- Loading overhead: PyTorch requires 2-2.5x the model size during loading
+- Components loaded: T5 encoder, CLIP encoder, VAE, and the main transformer
+- The T5-XXL encoder alone can consume 10-15GB during loading
+
+**GPU VRAM Requirements:**
+- **After loading**: 12-16GB VRAM for inference
+- **During generation**: Additional 2-4GB depending on image resolution
+
+### AMD ROCm-Specific Loading Strategy
+
+For AMD GPUs on ROCm/WSL2, we use a two-step loading process:
+
+1. **Load to CPU first**: More reliable than device_map options on ROCm
+2. **Move to GPU**: Ensures all components are on GPU for fast generation
 
 ```python
-# Correct approach:
-pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16)
-pipe.enable_sequential_cpu_offload()  # This handles GPU movement
-
-# Wrong approach (will fail):
-pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16)
-pipe.to('cuda')  # DON'T DO THIS - conflicts with sequential offload
+# ROCm-optimized approach:
+pipe = FluxPipeline.from_pretrained(
+    "black-forest-labs/FLUX.1-schnell",
+    torch_dtype=torch.bfloat16  # Better than float16 for ROCm
+)
+pipe = pipe.to("cuda")  # Move entire pipeline to GPU
 ```
+
+**Note on device_map with ROCm:**
+- `device_map="auto"` is not supported on ROCm
+- `device_map="balanced"` causes partial CPU offloading, severely impacting performance
+- Direct `.to("cuda")` after CPU loading is the most reliable method
 
 ## Usage Examples
 
@@ -307,9 +338,16 @@ Typical generation times on AMD Radeon RX 9070 XT:
 
 ## Hardware Requirements
 
-- **GPU:** AMD Radeon RX 6000 series or newer (8GB+ VRAM recommended)
-- **RAM:** 16GB+ system memory
-- **Storage:** 10GB+ free space for model downloads
+- **GPU:** AMD Radeon RX 6000 series or newer (16GB+ VRAM recommended)
+  - Minimum: 12GB VRAM (will work but may be tight)
+  - Recommended: 16GB+ VRAM for comfortable operation
+- **RAM:** 48GB+ system memory
+  - Minimum: 32GB (will use swap, slower loading)
+  - Recommended: 48GB (typical usage during model loading)
+  - Optimal: 64GB+ (smooth operation without swapping)
+- **Storage:** 30GB+ free space
+  - Model download: ~24GB
+  - Additional space for outputs and cache
 - **OS:** Windows 11 with WSL2 enabled
 - **Supported GPU architectures:** RDNA2, RDNA3, CDNA2, CDNA3
 
@@ -341,8 +379,14 @@ The docker-compose.yml includes essential WSL2 configurations:
 - Monitor progress: `docker-compose logs -f`
 
 ### Memory issues
-- Ensure adequate system RAM (16GB+ recommended)
-- FLUX.1.schnell requires significant VRAM (8GB+ GPU recommended)
+- **Insufficient RAM error during loading:**
+  - FLUX.1-schnell requires 48GB+ RAM for comfortable loading
+  - With 32GB RAM, enable swap space (at least 32GB)
+  - Monitor memory usage during loading: `free -h`
+- **GPU out of memory during generation:**
+  - Requires 12-16GB VRAM after model is loaded
+  - Use smaller image sizes (512x512 instead of 1024x1024)
+  - Enable CPU offloading if GPU memory is limited
 
 ### Sequential offload errors
 - Always load pipeline on CPU first

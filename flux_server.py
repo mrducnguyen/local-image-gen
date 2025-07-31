@@ -17,9 +17,25 @@ app = Flask(__name__)
 pipeline = None
 
 def load_model():
-    """Load the Flux.1.schnell model"""
+    """Load the Flux.1.schnell model - optimized for AMD ROCm GPUs
+    
+    This implementation loads the model to CPU first, then uses sequential CPU
+    offload to move components to GPU as needed during inference. This approach
+    is more reliable for ROCm/AMD GPUs and memory-constrained systems.
+    
+    IMPORTANT: Memory requirements for FLUX.1-schnell:
+    - Minimum: 32GB RAM (will use swap, slower)
+    - Recommended: 48GB RAM (typical usage observed)
+    - Optimal: 64GB+ RAM (smooth loading without swapping)
+    
+    The model is ~24GB on disk but requires 2-2.5x during loading due to:
+    - T5-XXL encoder (~10-15GB)
+    - CLIP encoder, VAE, and transformer components
+    - PyTorch loading overhead
+    """
     global pipeline
     print("Loading Flux.1.schnell model...")
+    print("Note: Requires 48GB+ RAM for model loading (64GB recommended)")
     
     # Get token from environment variable (.env file)
     hf_token = os.getenv('HF_TOKEN')
@@ -28,14 +44,14 @@ def load_model():
     print("Loading pipeline components...")
     pipeline = FluxPipeline.from_pretrained(
         "black-forest-labs/FLUX.1-schnell",
-        torch_dtype=torch.float16,  # Use half precision for memory efficiency
+        torch_dtype=torch.bfloat16,  # Better than float16 for Flux and ROCm
         token=hf_token  # Use token if provided
     )
     
     print("Pipeline loaded successfully on CPU")
     
     # Enable sequential CPU offload for memory efficiency
-    # This will automatically move components to GPU as needed
+    # This will automatically move components to GPU as needed  
     try:
         pipeline.enable_sequential_cpu_offload()
         print("Sequential CPU offload enabled - components will move to GPU as needed")
@@ -50,10 +66,8 @@ def load_model():
             print(f"Error moving to GPU: {e}")
             print("Will use CPU inference")
     
-    # Enable PyTorch's native scaled dot product attention
-    # This is available in PyTorch 2.0+ and provides similar benefits to xformers
-    print("Using PyTorch native scaled dot product attention (Flash Attention)")
-    
+    # PyTorch's native SDPA is automatically used and works well on WSL/ROCm
+    print("Using PyTorch native scaled dot product attention")
     print("Model loaded successfully!")
 
 @app.route('/health', methods=['GET'])
@@ -89,7 +103,7 @@ def generate_image():
         
         # Generate image
         with torch.inference_mode():
-            with torch.autocast("cuda", dtype=torch.float16):
+            with torch.autocast("cuda", dtype=torch.bfloat16):
                 image = pipeline(
                     prompt=prompt,
                     width=width,
@@ -152,7 +166,7 @@ def generate_image_file():
         
         # Generate image
         with torch.inference_mode():
-            with torch.autocast("cuda", dtype=torch.float16):
+            with torch.autocast("cuda", dtype=torch.bfloat16):
                 image = pipeline(
                     prompt=prompt,
                     width=width,
