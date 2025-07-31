@@ -1,3 +1,4 @@
 outputs
 .env
 *.log
+.claude/settings.local.json

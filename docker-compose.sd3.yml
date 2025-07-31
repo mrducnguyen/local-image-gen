@@ -1,0 +1,29 @@
+services:
+  sd3-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.sd3
+    container_name: sd3-service
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./outputs:/app/outputs
+      - ./models:/app/models
+      - ./.env:/app/.env:ro
+      # AMD WSL2 GPU support
+      - /usr/lib/wsl/lib/libdxcore.so:/usr/lib/libdxcore.so
+      - /opt/rocm/lib/libhsa-runtime64.so.1:/opt/rocm/lib/libhsa-runtime64.so.1
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HSA_ENABLE_SDMA=0
+      - PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.9,max_split_size_mb:2048
+      - TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+    devices:
+      - /dev/dxg
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    ipc: host
+    shm_size: 8gb
+    restart: unless-stopped

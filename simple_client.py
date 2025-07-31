@@ -6,7 +6,7 @@ from PIL import Image
 import io
 import time
 
-API_URL = "http://localhost:5000"
+API_URL = "http://localhost:5001"
 
 def check_service():
     """Check if the service is running"""

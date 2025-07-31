@@ -13,7 +13,7 @@ class FluxGUI:
         self.root.title("FLUX Image Generator")
         self.root.geometry("800x900")
         
-        self.api_url = "http://localhost:5000"
+        self.api_url = "http://localhost:5001"
         self.current_image = None
         
         self.setup_ui()
