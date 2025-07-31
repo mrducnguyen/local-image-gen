@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.9,max_split_size_mb:512 TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1 python flux_server.py)",
+      "Bash(touch:*)",
+      "Bash(./start.sh:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(./docker-start.sh:*)",
+      "Bash(curl:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)"
+    ],
+    "deny": []
+  }
+}
