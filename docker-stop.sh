@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Docker Flux Service Stop Script
+# Docker Image Generation Service Stop Script
 
-echo "Stopping Flux service..."
+echo "Stopping Image Generation service..."
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
@@ -14,9 +14,9 @@ fi
 if docker-compose ps | grep -q "Up"; then
     echo "Stopping containers..."
     docker-compose down
-    echo "✅ Flux service stopped successfully!"
+    echo "✅ Image service stopped successfully!"
 else
-    echo "ℹ️  No running Flux service containers found."
+    echo "ℹ️  No running image service containers found."
 fi
 
 # Optional: Clean up images (uncomment if you want to clean up)

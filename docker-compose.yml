@@ -1,7 +1,7 @@
 services:
-  flux-service:
+  image-service:
     build: .
-    container_name: flux-service
+    container_name: image-service
     ports:
       - "5000:5000"
     volumes:

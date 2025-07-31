@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Copy application files
-COPY flux_server.py .
+COPY unified_server.py .
 COPY .env* ./
 
 # Create outputs directory
@@ -26,5 +26,8 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5m --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
+# Default to FLUX model (can be overridden with MODEL_TYPE env var)
+ENV MODEL_TYPE=flux
+
 # Run the application
-CMD ["python", "flux_server.py"]
+CMD ["python", "unified_server.py"]
