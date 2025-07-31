@@ -114,12 +114,8 @@ def load_model():
     """Load the specified model based on environment variable or default to FLUX"""
     global model_type
     
-    # Get model type from environment variable or command line argument
+    # Get model type from environment variable only
     model_type = os.getenv('MODEL_TYPE', 'flux').lower()
-    
-    # Override with command line argument if provided
-    if len(sys.argv) > 1:
-        model_type = sys.argv[1].lower()
     
     # Validate model type
     if model_type not in ['flux', 'sd3']:
@@ -475,11 +471,11 @@ if __name__ == '__main__':
     
     # Show usage
     print("\nUsage:")
-    print("  python unified_server.py [model_type]")
-    print("  MODEL_TYPE=sd3 python unified_server.py")
-    print("\nModel types:")
-    print("  flux - FLUX.1-schnell (default)")
-    print("  sd3  - Stable Diffusion 3.5 Large")
+    print("  python unified_server.py")
+    print("\nModel selection:")
+    print("  Set MODEL_TYPE in .env file:")
+    print("  MODEL_TYPE=flux (default)")
+    print("  MODEL_TYPE=sd3")
     print("=" * 60)
     
     # Load model on startup

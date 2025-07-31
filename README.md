@@ -1,6 +1,6 @@
-# FLUX.1.schnell Docker Service
+# Unified Image Generation Service
 
-A containerized Flask API service for generating images using the FLUX.1.schnell model with AMD GPU acceleration via ROCm on WSL2.
+A containerized Flask API service for generating images using FLUX.1-schnell or Stable Diffusion 3.5 Large models with AMD GPU acceleration via ROCm on WSL2.
 
 ## ⚠️ Important: WSL2 Only
 
@@ -23,8 +23,53 @@ That's it! The Docker container includes all ROCm, PyTorch, and Python dependenc
 ```bash
 git clone <repository>
 cd flux-service
+
+# Create .env file with configuration
+cat > .env << EOF
+# Model selection (flux or sd3)
+MODEL_TYPE=flux
+
+# Hugging Face token (required for model access)
+HF_TOKEN=your_token_here
+EOF
+
 ./docker-start.sh
 ```
+
+**⚠️ Required: Hugging Face Setup**
+
+1. **Create Hugging Face account**: https://huggingface.co/join
+2. **Generate access token**: https://huggingface.co/settings/tokens
+   - Create a new token with "Read" permissions
+3. **Accept model licenses**:
+   - For FLUX: https://huggingface.co/black-forest-labs/FLUX.1-schnell
+   - For SD3.5: https://huggingface.co/stabilityai/stable-diffusion-3.5-large
+   - Click "Accept license" on each model page
+4. **Add token to .env file**: Replace `your_token_here` with your actual token
+
+**🌐 Network Access Setup (Optional)**
+
+To access the service from Windows host or other devices:
+
+1. **Open port in WSL2 firewall:**
+   ```bash
+   sudo ufw allow 5000
+   ```
+
+2. **Configure Windows port forwarding** (run in Windows PowerShell as Administrator):
+   ```powershell
+   netsh interface portproxy add v4tov4 listenport=5000 listenaddress=0.0.0.0 connectport=5000 connectaddress=localhost
+   ```
+
+3. **Open Windows Firewall** (if needed):
+   ```powershell
+   New-NetFirewallRule -DisplayName "WSL Port 5000" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow
+   ```
+
+After setup, access the service from:
+- **WSL2**: `http://localhost:5000`
+- **Windows host**: `http://localhost:5000` 
+- **Other devices**: `http://YOUR_WINDOWS_IP:5000`
 
 ### Option 2: Native WSL2 Installation
 
@@ -145,24 +190,27 @@ FLUX.1-schnell consists of several large components that contribute to its memor
 
 ### AMD ROCm-Specific Loading Strategy
 
-For AMD GPUs on ROCm/WSL2, we use a two-step loading process:
+For AMD GPUs on ROCm/WSL2, we use sequential CPU offload instead of direct GPU loading:
 
-1. **Load to CPU first**: More reliable than device_map options on ROCm
-2. **Move to GPU**: Ensures all components are on GPU for fast generation
+1. **Load to CPU first**: Always load the pipeline on CPU initially
+2. **Use sequential CPU offload**: Components move to GPU as needed during inference
 
 ```python
-# ROCm-optimized approach:
+# ROCm-optimized approach (what actually works):
 pipe = FluxPipeline.from_pretrained(
     "black-forest-labs/FLUX.1-schnell",
     torch_dtype=torch.bfloat16  # Better than float16 for ROCm
 )
-pipe = pipe.to("cuda")  # Move entire pipeline to GPU
+# Load on CPU first, then enable sequential offload
+pipe.enable_sequential_cpu_offload()  # This works reliably
 ```
 
-**Note on device_map with ROCm:**
-- `device_map="auto"` is not supported on ROCm
-- `device_map="balanced"` causes partial CPU offloading, severely impacting performance
-- Direct `.to("cuda")` after CPU loading is the most reliable method
+**Important Loading Notes for ROCm/WSL2:**
+- **`.to("cuda")` was never successful** - causes various GPU memory and initialization issues
+- **`device_map="auto"`** is not supported on ROCm
+- **`device_map="balanced"`** causes partial CPU offloading, severely impacting performance  
+- **`pipeline.enable_sequential_cpu_offload()`** is the only reliable method that consistently works
+- This automatically moves components to GPU as needed during inference while keeping unused components on CPU
 
 ## Usage Examples
 
@@ -318,12 +366,30 @@ $ curl -X POST http://localhost:5000/generate_file -H "Content-Type: application
 
 ## Configuration
 
+### Model Selection
+
+Set the model type in your `.env` file:
+
+```bash
+# Choose one:
+MODEL_TYPE=flux    # FLUX.1-schnell (default) - faster, 4 steps optimal
+MODEL_TYPE=sd3     # Stable Diffusion 3.5 Large - higher quality, more steps
+```
+
+**Model Differences:**
+- **FLUX.1-schnell**: Optimized for speed, 4 inference steps, no negative prompts
+- **SD3.5-Large**: Higher quality, 24+ inference steps, supports negative prompts and reference images
+
 ### Environment Variables
 
+Required in `.env` file:
+- `HF_TOKEN` - Hugging Face access token (required for model downloads)
+- `MODEL_TYPE` - Model selection: `flux` or `sd3` (defaults to `flux`)
+
+Docker environment (automatically set):
 - `HSA_ENABLE_SDMA=0` - Disables SDMA for WSL compatibility
 - `PYTORCH_HIP_ALLOC_CONF` - Memory allocation settings
 - `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1` - Enables experimental features
-- `HF_TOKEN` - Hugging Face token (optional, in .env file)
 
 ### Docker Volumes
 

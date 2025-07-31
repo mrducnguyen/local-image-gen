@@ -26,8 +26,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5m --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
-# Default to FLUX model (can be overridden with MODEL_TYPE env var)
-ENV MODEL_TYPE=flux
-
 # Run the application
 CMD ["python", "unified_server.py"]
